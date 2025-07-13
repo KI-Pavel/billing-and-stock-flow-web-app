@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Billing and Stock Flow - Login</title>
+    <link href="src/output.css" rel="stylesheet" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: linear-gradient(to right, #667eea, #764ba2);
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+
+      .login-container {
+        background: white;
+        padding: 2rem;
+        border-radius: 10px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        width: 320px;
+        text-align: center;
+      }
+
+      input,
+      button {
+        width: 100%;
+        padding: 0.7rem;
+        margin: 0.5rem 0;
+        border-radius: 5px;
+        font-size: 1rem;
+      }
+
+      input {
+        border: 1px solid #ccc;
+      }
+
+      button {
+        background: #667eea;
+        color: white;
+        border: none;
+        margin-top: 1rem;
+        font-size: 1.1rem;
+        cursor: pointer;
+        transition: background 0.3s;
+      }
+
+      button:hover {
+        background: #5a67d8;
+      }
+
+      .error {
+        color: red;
+        margin-top: 1rem;
+        font-weight: bold;
+        min-height: 1.5rem;
+        transition: all 0.2s ease-in-out;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-container">
+      <h2>Login</h2>
+      <input
+        type="text"
+        id="username"
+        placeholder="Username"
+        autocomplete="off"
+      />
+      <input
+        type="password"
+        id="password"
+        placeholder="Password"
+        autocomplete="off"
+      />
+      <button id="loginBtn">Login</button>
+      <p class="error" id="errorMsg"></p>
+    </div>
+
+    <script>
+      const loginBtn = document.getElementById("loginBtn");
+      const errorMsg = document.getElementById("errorMsg");
+
+      loginBtn.addEventListener("click", async () => {
+        const username = document.getElementById("username").value.trim();
+        const password = document.getElementById("password").value.trim();
+
+        errorMsg.textContent = ""; // Clear previous error
+
+        if (!username || !password) {
+          errorMsg.textContent = "Please enter username and password";
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
+
+          const data = await res.json();
+
+          if (!res.ok) {
+            errorMsg.textContent = data.message || "Login failed";
+            return;
+          }
+
+          localStorage.setItem("token", data.token);
+          localStorage.setItem("role", data.role);
+
+          // Redirect based on role
+          if (data.role === "admin") {
+            window.location.href = "admin.html";
+          } else if (data.role === "seller") {
+            window.location.href = "seller.html";
+          } else {
+            errorMsg.textContent = "Unknown role";
+          }
+        } catch (err) {
+          errorMsg.textContent = "Network error. Please try again.";
+        }
+      });
+    </script>
+  </body>
+</html>
