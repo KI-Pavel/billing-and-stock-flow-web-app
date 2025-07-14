@@ -68,7 +68,18 @@
   </head>
   <body>
     <div class="login-container">
+      <h1
+        style="
+          font-size: 2rem;
+          font-weight: 800;
+          margin-bottom: 1rem;
+          color: #333;
+        "
+      >
+        Billing and Stock Flow
+      </h1>
       <h2>Login</h2>
+
       <input
         type="text"
         id="username"
@@ -93,7 +104,7 @@
         const username = document.getElementById("username").value.trim();
         const password = document.getElementById("password").value.trim();
 
-        errorMsg.textContent = "";
+        errorMsg.textContent = ""; // Clear previous error
 
         if (!username || !password) {
           errorMsg.textContent = "Please enter username and password";
