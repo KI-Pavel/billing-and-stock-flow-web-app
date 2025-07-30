@@ -1,13 +1,21 @@
 const mongoose = require('mongoose');
 
 const InvoiceSchema = new mongoose.Schema({
-  product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+  // 👇 Common fields
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
-  quantity: { type: Number, required: true },
-  amountPaid: { type: Number, required: true },
-  dues: { type: Number, required: true },
+  phone: { type: String }, // Optional but useful for adjustments
   date: { type: Date, default: Date.now },
-  seller: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
+  type: { type: String, enum: ['sale', 'adjustment'], default: 'sale' },
+
+  // 👇 Only for sales
+  product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+  quantity: { type: Number },
+  amountPaid: { type: Number },
+  dues: { type: Number },
+  seller: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+
+  // 👇 Only for adjustments
+  amount: { type: Number }, // amount paid to adjust due
 });
 
 module.exports = mongoose.models.Invoice || mongoose.model('Invoice', InvoiceSchema);

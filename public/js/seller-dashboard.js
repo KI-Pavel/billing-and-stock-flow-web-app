@@ -26,6 +26,11 @@ async function fetchSalesToday() {
   return res.json();
 }
 
+async function fetchWeeklySales() {
+  const res = await fetch("/api/sales/weekly");
+  return res.json();
+}
+
 async function fetchInvoiceHistory(phone) {
   const res = await fetch(`/api/customers/${phone}`);
   if (res.status !== 200) return null;
@@ -61,7 +66,6 @@ function parseJwt(token) {
   return JSON.parse(atob(token.split(".")[1]));
 }
 
-// Populate products dropdowns
 async function populateProductsDropdown() {
   const products = await fetchProducts();
   const select = document.getElementById("invoiceProduct");
@@ -74,7 +78,6 @@ async function populateProductsDropdown() {
   });
 }
 
-// Show top 5 products in stock section
 async function showTopStock() {
   const products = await fetchTopProducts();
   const stockList = document.getElementById("stockList");
@@ -89,11 +92,14 @@ async function showTopStock() {
     "</tbody></table>";
 }
 
-// Show sales chart
-async function showSalesChart() {
+let dailyChartInstance = null;
+async function showDailySalesChart() {
   const salesData = await fetchSalesToday();
-  const ctx = document.getElementById("salesChart").getContext("2d");
-  new Chart(ctx, {
+  const ctx = document.getElementById("dailySalesChart").getContext("2d");
+
+  if (dailyChartInstance) dailyChartInstance.destroy();
+
+  dailyChartInstance = new Chart(ctx, {
     type: "bar",
     data: {
       labels: salesData.map((s) => s.productName),
@@ -112,7 +118,49 @@ async function showSalesChart() {
   });
 }
 
-// Handle invoice creation
+let weeklyChartInstance = null;
+
+async function showWeeklySalesChart() {
+  const salesData = await fetch('/api/sales/week').then(res => res.json());
+
+  if (!salesData || salesData.length === 0) {
+    // Handle empty data case: clear chart or show message
+    console.warn('No weekly sales data found');
+    return;
+  }
+
+  const ctx = document.getElementById('salesChartWeek').getContext('2d');
+
+  // Extract labels (dates) and data (totalSales)
+  const labels = salesData.map(item => item.date);
+  const data = salesData.map(item => item.totalSales);
+
+  // Optional: format dates to nicer format if you want
+  // labels = labels.map(d => new Date(d).toLocaleDateString());
+
+  // Destroy old chart if exists
+  if (window.weeklyChart) window.weeklyChart.destroy();
+
+  window.weeklyChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Total Sales (৳)',
+        data,
+        backgroundColor: '#4c51bf',
+      }],
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true },
+      },
+    },
+  });
+}
+
+
 document.getElementById("invoiceForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const productId = document.getElementById("invoiceProduct").value;
@@ -137,13 +185,13 @@ document.getElementById("invoiceForm").addEventListener("submit", async (e) => {
     document.getElementById("invoiceForm").reset();
     await populateProductsDropdown();
     await showTopStock();
-    await showSalesChart();
+    await showDailySalesChart();
+    await showWeeklySalesChart();
   } else {
     alert(result.message || "Error creating invoice.");
   }
 });
 
-// Handle invoice history lookup
 document.getElementById("historyForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const phone = document.getElementById("historyPhone").value.trim();
@@ -160,17 +208,17 @@ document.getElementById("historyForm").addEventListener("submit", async (e) => {
 
   const { customer, invoices } = data;
 
-  let html = `<h3>Customer: ${
-    customer.phone
-  } | Total Dues: ৳${customer.dues.toFixed(2)}</h3>`;
+  let html = `<h3>Customer: ${customer.phone} | Total Dues: ৳${customer.dues.toFixed(
+    2
+  )}</h3>`;
   html +=
     "<table><thead><tr><th>Product</th><th>Qty</th><th>Paid</th><th>Dues</th><th>Date</th></tr></thead><tbody>";
   invoices.forEach((inv) => {
     html += `<tr>
-      <td>${inv.product.name}</td>
-      <td>${inv.quantity}</td>
-      <td>৳${inv.amountPaid}</td>
-      <td>৳${inv.dues}</td>
+      <td>${inv.product ? inv.product.name : '—'}</td>
+      <td>${inv.quantity || '-'}</td>
+      <td>৳${inv.amountPaid || inv.amount || 0}</td>
+      <td>৳${inv.dues || '-'}</td>
       <td>${new Date(inv.date).toLocaleDateString()}</td>
     </tr>`;
   });
@@ -181,7 +229,6 @@ document.getElementById("historyForm").addEventListener("submit", async (e) => {
   document.getElementById("dueAdjustSection").style.display = "block";
 });
 
-// Handle due adjustment form submit
 document
   .getElementById("adjustDueForm")
   .addEventListener("submit", async (e) => {
@@ -195,7 +242,7 @@ document
     if (res.success) {
       alert("Due adjusted successfully!");
       document.getElementById("adjustDueForm").reset();
-      document.getElementById("historyForm").dispatchEvent(new Event("submit")); // Refresh history & dues
+      document.getElementById("historyForm").dispatchEvent(new Event("submit"));
     } else {
       alert(res.message || "Failed to adjust due");
     }
@@ -204,5 +251,6 @@ document
 window.onload = async () => {
   await populateProductsDropdown();
   await showTopStock();
-  await showSalesChart();
+  await showDailySalesChart();
+  await showWeeklySalesChart();
 };

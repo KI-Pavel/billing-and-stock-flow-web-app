@@ -21,6 +21,7 @@ router.get("/:phone", async (req, res) => {
 });
 
 // Adjust customer due endpoint
+// Adjust customer due endpoint
 router.post("/adjust-due", async (req, res) => {
   try {
     const { phone, amount } = req.body;
@@ -40,6 +41,15 @@ router.post("/adjust-due", async (req, res) => {
     // Reduce due by amount paid, but due cannot go below 0
     customer.dues = Math.max(customer.dues - amount, 0);
     await customer.save();
+
+    // 🔥 Log this adjustment in the invoice history
+    await Invoice.create({
+      customer: customer._id,
+      phone,
+      type: "adjustment",
+      amount: amount,
+      date: new Date(),
+    });
 
     return res.json({
       success: true,

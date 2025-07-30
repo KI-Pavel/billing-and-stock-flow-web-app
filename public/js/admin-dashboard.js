@@ -1,5 +1,3 @@
-// ✅ Updated seller-dashboard.js with due adjustment
-
 const token = localStorage.getItem("token");
 const role = localStorage.getItem("role");
 if (!token || role !== "admin") {
@@ -25,6 +23,11 @@ async function fetchTopProducts() {
 
 async function fetchSalesToday() {
   const res = await fetch("/api/sales/today");
+  return res.json();
+}
+
+async function fetchWeeklySales() {
+  const res = await fetch("/api/sales/weekly");
   return res.json();
 }
 
@@ -89,10 +92,14 @@ async function showTopStock() {
     "</tbody></table>";
 }
 
-async function showSalesChart() {
+let dailyChartInstance = null;
+async function showDailySalesChart() {
   const salesData = await fetchSalesToday();
-  const ctx = document.getElementById("salesChart").getContext("2d");
-  const chart = new Chart(ctx, {
+  const ctx = document.getElementById("dailySalesChart").getContext("2d");
+
+  if (dailyChartInstance) dailyChartInstance.destroy();
+
+  dailyChartInstance = new Chart(ctx, {
     type: "bar",
     data: {
       labels: salesData.map((s) => s.productName),
@@ -100,9 +107,49 @@ async function showSalesChart() {
         {
           label: "Quantity Sold Today",
           data: salesData.map((s) => s.totalQuantity),
-          backgroundColor: "#2c7a7b",
+          backgroundColor: "#4c51bf",
         },
       ],
+    },
+    options: {
+      responsive: true,
+      scales: { y: { beginAtZero: true } },
+    },
+  });
+}
+
+let weeklyChartInstance = null;
+
+async function showWeeklySalesChart() {
+  const salesData = await fetch('/api/sales/week').then(res => res.json());
+
+  if (!salesData || salesData.length === 0) {
+    // Handle empty data case: clear chart or show message
+    console.warn('No weekly sales data found');
+    return;
+  }
+
+  const ctx = document.getElementById('salesChartWeek').getContext('2d');
+
+  // Extract labels (dates) and data (totalSales)
+  const labels = salesData.map(item => item.date);
+  const data = salesData.map(item => item.totalSales);
+
+  // Optional: format dates to nicer format if you want
+  // labels = labels.map(d => new Date(d).toLocaleDateString());
+
+  // Destroy old chart if exists
+  if (window.weeklyChart) window.weeklyChart.destroy();
+
+  window.weeklyChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Total Sales (৳)',
+        data,
+        backgroundColor: '#4c51bf',
+      }],
     },
     options: {
       responsive: true,
@@ -112,6 +159,7 @@ async function showSalesChart() {
     },
   });
 }
+
 
 document.getElementById("invoiceForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -137,7 +185,8 @@ document.getElementById("invoiceForm").addEventListener("submit", async (e) => {
     document.getElementById("invoiceForm").reset();
     await populateProductsDropdown();
     await showTopStock();
-    await showSalesChart();
+    await showDailySalesChart();
+    await showWeeklySalesChart();
   } else {
     alert(result.message || "Error creating invoice.");
   }
@@ -165,10 +214,10 @@ document.getElementById("historyForm").addEventListener("submit", async (e) => {
     "<table><thead><tr><th>Product</th><th>Qty</th><th>Paid</th><th>Dues</th><th>Date</th></tr></thead><tbody>";
   invoices.forEach((inv) => {
     html += `<tr>
-      <td>${inv.product.name}</td>
-      <td>${inv.quantity}</td>
-      <td>৳${inv.amountPaid}</td>
-      <td>৳${inv.dues}</td>
+      <td>${inv.product ? inv.product.name : "—"}</td>
+      <td>${inv.quantity || "-"}</td>
+      <td>৳${inv.amountPaid || inv.amount || 0}</td>
+      <td>৳${inv.dues || "-"}</td>
       <td>${new Date(inv.date).toLocaleDateString()}</td>
     </tr>`;
   });
@@ -203,5 +252,6 @@ document
 window.onload = async () => {
   await populateProductsDropdown();
   await showTopStock();
-  await showSalesChart();
+  await showDailySalesChart();
+  await showWeeklySalesChart();
 };
