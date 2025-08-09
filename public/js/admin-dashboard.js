@@ -27,7 +27,7 @@ async function fetchSalesToday() {
 }
 
 async function fetchWeeklySales() {
-  const res = await fetch("/api/sales/weekly");
+  const res = await fetch("/api/sales/week");
   return res.json();
 }
 
@@ -121,35 +121,31 @@ async function showDailySalesChart() {
 let weeklyChartInstance = null;
 
 async function showWeeklySalesChart() {
-  const salesData = await fetch('/api/sales/week').then(res => res.json());
+  const salesData = await fetchWeeklySales();
 
   if (!salesData || salesData.length === 0) {
-    // Handle empty data case: clear chart or show message
-    console.warn('No weekly sales data found');
+    console.warn("No weekly sales data found");
     return;
   }
 
-  const ctx = document.getElementById('salesChartWeek').getContext('2d');
+  const ctx = document.getElementById("weeklySalesChart").getContext("2d");
 
-  // Extract labels (dates) and data (totalSales)
-  const labels = salesData.map(item => item.date);
-  const data = salesData.map(item => item.totalSales);
+  const labels = salesData.map((item) => item.date);
+  const data = salesData.map((item) => item.totalSales);
 
-  // Optional: format dates to nicer format if you want
-  // labels = labels.map(d => new Date(d).toLocaleDateString());
+  if (weeklyChartInstance) weeklyChartInstance.destroy();
 
-  // Destroy old chart if exists
-  if (window.weeklyChart) window.weeklyChart.destroy();
-
-  window.weeklyChart = new Chart(ctx, {
-    type: 'bar',
+  weeklyChartInstance = new Chart(ctx, {
+    type: "bar",
     data: {
       labels,
-      datasets: [{
-        label: 'Total Sales (৳)',
-        data,
-        backgroundColor: '#4c51bf',
-      }],
+      datasets: [
+        {
+          label: "Total Sales (৳)",
+          data,
+          backgroundColor: "#4c51bf",
+        },
+      ],
     },
     options: {
       responsive: true,
@@ -160,6 +156,164 @@ async function showWeeklySalesChart() {
   });
 }
 
+// ========== NEW: Show History in new tab with Download PDF button ==========
+
+document.getElementById("historyForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const phone = document.getElementById("historyPhone").value.trim();
+
+  if (!phone) {
+    alert("Please enter a phone number");
+    return;
+  }
+
+  const data = await fetchInvoiceHistory(phone);
+  if (!data) {
+    alert("Customer not found.");
+    return;
+  }
+
+  const { customer, invoices } = data;
+
+  // Open a new tab
+  const historyWindow = window.open("", "_blank");
+  if (!historyWindow) {
+    alert("Popup blocked! Please allow popups for this site.");
+    return;
+  }
+
+  // Build HTML content for new tab
+  const html = `
+    <html>
+      <head>
+        <title>Invoice History for ${phone}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+          th { background-color: #eee; }
+          button {
+            margin: 20px 0;
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+          }
+        </style>
+      </head>
+      <body>
+        <h2>Customer: ${phone} | Total Dues: ৳${customer.dues.toFixed(2)}</h2>
+        <button id="downloadPdfBtn">Download History PDF</button>
+        <table>
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Quantity</th>
+              <th>Amount Paid</th>
+              <th>Dues</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${invoices
+              .map(
+                (inv) => `
+              <tr>
+                <td>${inv.product ? inv.product.name : "—"}</td>
+                <td>${inv.quantity || "-"}</td>
+                <td>৳${inv.amountPaid || 0}</td>
+                <td>৳${inv.dues || 0}</td>
+                <td>${new Date(inv.date).toLocaleDateString()}</td>
+              </tr>
+            `
+              )
+              .join("")}
+          </tbody>
+        </table>
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+        <script>
+          const { jsPDF } = window.jspdf;
+          document.getElementById("downloadPdfBtn").addEventListener("click", () => {
+            const doc = new jsPDF();
+            doc.setFontSize(18);
+            doc.text("Invoice History for ${phone}", 10, 20);
+            doc.setFontSize(12);
+
+            let startY = 30;
+            const lineHeight = 10;
+            doc.text("Total Dues: ৳${customer.dues.toFixed(2)}", 10, startY);
+            startY += lineHeight;
+
+            const headers = ["Product", "Quantity", "Amount Paid", "Dues", "Date"];
+            const colX = [10, 60, 90, 130, 160];
+            headers.forEach((header, i) => {
+              doc.text(header, colX[i], startY);
+            });
+            startY += lineHeight;
+
+            const invoices = ${JSON.stringify(invoices)};
+            invoices.forEach((inv) => {
+              doc.text(inv.product ? inv.product.name : "—", colX[0], startY);
+              doc.text(String(inv.quantity || "-"), colX[1], startY);
+              doc.text("৳" + String(inv.amountPaid || 0), colX[2], startY);
+              doc.text("৳" + String(inv.dues || 0), colX[3], startY);
+              const dateStr = new Date(inv.date).toLocaleDateString();
+              doc.text(dateStr, colX[4], startY);
+              startY += lineHeight;
+            });
+
+            doc.save("invoice_history_${phone}.pdf");
+          });
+        </script>
+      </body>
+    </html>
+  `;
+
+  historyWindow.document.write(html);
+  historyWindow.document.close();
+});
+
+// ======= ADD/REMOVE PRODUCT FORM HANDLER =======
+document.getElementById("productForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const name = document.getElementById("productName").value.trim();
+  const price = parseFloat(document.getElementById("productPrice").value);
+  const quantity = parseInt(document.getElementById("productQuantity").value);
+
+  if (!name || isNaN(price) || isNaN(quantity)) {
+    return alert("Please fill all product fields with valid values.");
+  }
+
+  try {
+    const res = await fetch("/api/products/update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ name, price, quantity }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      return alert(errorData.message || "Failed to update product.");
+    }
+
+    const updatedProduct = await res.json();
+
+    alert(
+      `Product "${updatedProduct.name}" updated successfully! Current quantity: ${updatedProduct.quantity}`
+    );
+
+    e.target.reset();
+
+    await populateProductsDropdown();
+    await showTopStock();
+  } catch (error) {
+    alert("Error updating product: " + error.message);
+  }
+});
 
 document.getElementById("invoiceForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -191,63 +345,6 @@ document.getElementById("invoiceForm").addEventListener("submit", async (e) => {
     alert(result.message || "Error creating invoice.");
   }
 });
-
-document.getElementById("historyForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const phone = document.getElementById("historyPhone").value.trim();
-  const resultDiv = document.getElementById("historyResult");
-  resultDiv.innerHTML = "Loading...";
-
-  const data = await fetchInvoiceHistory(phone);
-  if (!data) {
-    resultDiv.innerHTML = "Customer not found.";
-    document.getElementById("dueAdjustSection").style.display = "none";
-    return;
-  }
-
-  const { customer, invoices } = data;
-
-  let html = `<h3>Customer: ${customer.phone} | Dues: ৳${customer.dues.toFixed(
-    2
-  )}</h3>`;
-  html +=
-    "<table><thead><tr><th>Product</th><th>Qty</th><th>Paid</th><th>Dues</th><th>Date</th></tr></thead><tbody>";
-  invoices.forEach((inv) => {
-    html += `<tr>
-      <td>${inv.product ? inv.product.name : "—"}</td>
-      <td>${inv.quantity || "-"}</td>
-      <td>৳${inv.amountPaid || inv.amount || 0}</td>
-      <td>৳${inv.dues || "-"}</td>
-      <td>${new Date(inv.date).toLocaleDateString()}</td>
-    </tr>`;
-  });
-  html += "</tbody></table>";
-
-  resultDiv.innerHTML = html;
-  currentPhone = phone;
-  document.getElementById("dueAdjustSection").style.display = "block";
-});
-
-document
-  .getElementById("adjustDueForm")
-  .addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const amount = parseFloat(document.getElementById("adjustAmount").value);
-    if (!currentPhone || isNaN(amount) || amount <= 0) {
-      return alert("Enter valid amount");
-    }
-
-    const res = await adjustCustomerDues(currentPhone, amount);
-    if (res.success) {
-      alert("Due adjusted successfully!");
-      document.getElementById("adjustDueForm").reset();
-      await document
-        .getElementById("historyForm")
-        .dispatchEvent(new Event("submit"));
-    } else {
-      alert(res.message || "Failed to adjust due");
-    }
-  });
 
 window.onload = async () => {
   await populateProductsDropdown();

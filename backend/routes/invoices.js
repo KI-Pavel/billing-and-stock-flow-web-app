@@ -3,6 +3,7 @@ const router = express.Router();
 const Invoice = require('../models/Invoice');
 const Product = require('../models/Product');
 const Customer = require('../models/Customer');
+const generateInvoicePDF = require('../utils/pdfGenerator');
 
 // Create a new invoice and update stock, customer dues
 router.post('/create', async (req, res) => {
@@ -51,6 +52,36 @@ router.post('/create', async (req, res) => {
     res.json({ invoice });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// Download invoice PDF route
+router.get('/download/:id', async (req, res) => {
+  try {
+    const invoiceId = req.params.id;
+
+    // Populate product, customer, and seller info
+    const invoice = await Invoice.findById(invoiceId)
+      .populate('product')
+      .populate('customer')
+      .populate('seller');
+
+    if (!invoice) {
+      return res.status(404).json({ message: 'Invoice not found' });
+    }
+
+    const pdfBuffer = await generateInvoicePDF(invoice);
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=invoice_${invoiceId}.pdf`,
+      'Content-Length': pdfBuffer.length,
+    });
+
+    res.send(pdfBuffer);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error generating invoice PDF' });
   }
 });
 
