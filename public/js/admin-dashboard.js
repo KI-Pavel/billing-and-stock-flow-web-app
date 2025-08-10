@@ -119,7 +119,6 @@ async function showDailySalesChart() {
 }
 
 let weeklyChartInstance = null;
-
 async function showWeeklySalesChart() {
   const salesData = await fetchWeeklySales();
 
@@ -336,11 +335,71 @@ document.getElementById("invoiceForm").addEventListener("submit", async (e) => {
 
   if (result.invoice) {
     alert("Invoice created successfully!");
+
+    // Get product name BEFORE resetting form
+    const productSelect = document.getElementById("invoiceProduct");
+    const productName =
+      productSelect.options[productSelect.selectedIndex].text.split(" (")[0];
+
     document.getElementById("invoiceForm").reset();
+
     await populateProductsDropdown();
     await showTopStock();
     await showDailySalesChart();
     await showWeeklySalesChart();
+
+    if (confirm("Do you want to print the invoice now?")) {
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
+        alert("Popup blocked! Please allow popups for this site.");
+        return;
+      }
+
+      printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print Invoice</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h2 { text-align: center; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #333; padding: 8px; text-align: left; }
+            th { background-color: #eee; }
+            .center { text-align: center; }
+          </style>
+        </head>
+        <body>
+          <h2>Invoice</h2>
+          <p><strong>Customer Phone:</strong> ${phone}</p>
+          <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Quantity</th>
+                <th>Amount Paid</th>
+                <th>Dues</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${productName}</td>
+                <td class="center">${quantity}</td>
+                <td>৳${amountPaid.toFixed(2)}</td>
+                <td>৳${(result.invoice.dues ?? 0).toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+      printWindow.document.close();
+    }
   } else {
     alert(result.message || "Error creating invoice.");
   }
