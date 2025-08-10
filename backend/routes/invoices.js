@@ -1,87 +1,39 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const Invoice = require('../models/Invoice');
-const Product = require('../models/Product');
-const Customer = require('../models/Customer');
-const generateInvoicePDF = require('../utils/pdfGenerator');
+const Invoice = require("../models/Invoice");
+const path = require("path");
+const authMiddleware = require("../middleware/auth"); // your JWT auth middleware
 
-// Create a new invoice and update stock, customer dues
-router.post('/create', async (req, res) => {
+// Route to download invoice PDF by invoice ID
+router.get("/download/:invoiceId", authMiddleware, async (req, res) => {
   try {
-    const { productId, quantity, amountPaid, phone, sellerId } = req.body;
+    const invoiceId = req.params.invoiceId;
 
-    if (!productId || !quantity || !amountPaid || !phone || !sellerId) {
-      return res.status(400).json({ message: 'Missing required fields' });
-    }
-
-    const product = await Product.findById(productId);
-    if (!product) return res.status(404).json({ message: 'Product not found' });
-
-    if (product.quantity < quantity) {
-      return res.status(400).json({ message: 'Insufficient stock' });
-    }
-
-    let customer = await Customer.findOne({ phone });
-    if (!customer) {
-      customer = new Customer({ phone, dues: 0 });
-    }
-
-    const totalCost = product.price * quantity;
-    const dues = totalCost - amountPaid;
-
-    // Update product stock
-    product.quantity -= quantity;
-    await product.save();
-
-    // Update customer dues
-    customer.dues += dues;
-    await customer.save();
-
-    // Create invoice
-    const invoice = new Invoice({
-      product: product._id,
-      customer: customer._id,
-      quantity,
-      amountPaid,
-      dues,
-      seller: sellerId
-    });
-
-    await invoice.save();
-
-    res.json({ invoice });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Download invoice PDF route
-router.get('/download/:id', async (req, res) => {
-  try {
-    const invoiceId = req.params.id;
-
-    // Populate product, customer, and seller info
-    const invoice = await Invoice.findById(invoiceId)
-      .populate('product')
-      .populate('customer')
-      .populate('seller');
-
+    // Find invoice and verify ownership if needed
+    const invoice = await Invoice.findById(invoiceId);
     if (!invoice) {
-      return res.status(404).json({ message: 'Invoice not found' });
+      return res.status(404).json({ message: "Invoice not found" });
     }
 
-    const pdfBuffer = await generateInvoicePDF(invoice);
+    // Example: assume invoice PDF files are saved in 'invoices/' folder by ID
+    const invoiceFilePath = path.join(
+      __dirname,
+      "../invoices",
+      `${invoiceId}.pdf`
+    );
 
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename=invoice_${invoiceId}.pdf`,
-      'Content-Length': pdfBuffer.length,
+    // You can also dynamically generate PDF here if you prefer
+
+    // Send file to client
+    res.download(invoiceFilePath, `invoice_${invoiceId}.pdf`, (err) => {
+      if (err) {
+        console.error("Error sending invoice file:", err);
+        res.status(500).send("Error sending invoice file");
+      }
     });
-
-    res.send(pdfBuffer);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Error generating invoice PDF' });
+  } catch (error) {
+    console.error("Download invoice error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 

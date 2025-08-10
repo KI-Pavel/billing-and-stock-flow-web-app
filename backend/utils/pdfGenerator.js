@@ -1,40 +1,56 @@
-const PDFDocument = require('pdfkit');
+const PDFDocument = require("pdfkit");
+const path = require("path");
+const fs = require("fs");
 
-function generateInvoicePDF(invoice) {
-  const doc = new PDFDocument({ size: 'A4' });
-  let buffers = [];
-
-  doc.on('data', buffers.push.bind(buffers));
-  doc.on('end', () => {});
-
-  // Header
-  doc.fontSize(20).text('Invoice', { align: 'center' });
-  doc.moveDown();
-
-  // Invoice info
-  doc.fontSize(12).text(`Invoice ID: ${invoice._id}`);
-  doc.text(`Date: ${invoice.date ? new Date(invoice.date).toLocaleDateString() : ''}`);
-  doc.text(`Customer Phone: ${invoice.customer ? invoice.customer.phone : 'N/A'}`);
-  doc.text(`Seller ID: ${invoice.seller ? (invoice.seller._id || invoice.seller.toString()) : 'N/A'}`);
-  doc.moveDown();
-
-  // Product and payment details
-  doc.text(`Product: ${invoice.product ? invoice.product.name : 'N/A'}`);
-  doc.text(`Quantity: ${invoice.quantity || 0}`);
-  doc.text(`Amount Paid: ৳${invoice.amountPaid || 0}`);
-  doc.text(`Dues: ৳${invoice.dues || 0}`);
-
-  doc.moveDown();
-  doc.text('Thank you!', { align: 'center' });
-
-  doc.end();
-
+async function generateInvoicePDF(invoice) {
   return new Promise((resolve, reject) => {
-    doc.on('end', () => {
-      const pdfData = Buffer.concat(buffers);
-      resolve(pdfData);
-    });
-    doc.on('error', reject);
+    try {
+      const doc = new PDFDocument({ size: "A4", margin: 50 });
+
+      // Load Unicode font
+      const fontPath = path.join(__dirname, "../fonts/NotoSans-Bengali.ttf");
+      if (!fs.existsSync(fontPath)) {
+        console.error("Font file missing:", fontPath);
+        return reject(new Error("Unicode font not found."));
+      }
+      doc.font(fontPath).fontSize(14);
+
+      // Title
+      doc.text("Invoice", { align: "center", underline: true });
+      doc.moveDown();
+
+      // Invoice Details
+      doc.fontSize(12);
+      doc.text(`Invoice ID: ${invoice._id}`);
+      doc.text(`Date: ${new Date(invoice.createdAt).toLocaleString()}`);
+      doc.text(`Customer: ${invoice.customer?.name || "N/A"}`);
+      doc.text(`Phone: ${invoice.customer?.phone || "N/A"}`);
+      doc.moveDown();
+
+      // Product Details
+      doc.text("Product Details:", { underline: true });
+      doc.text(`Product: ${invoice.product?.name || "N/A"}`);
+      doc.text(`Quantity: ${invoice.quantity || 0}`);
+      doc.text(`Price per unit: ৳${invoice.product?.price || 0}`);
+      doc.moveDown();
+
+      // Payment Info
+      const totalAmount = (invoice.product?.price || 0) * (invoice.quantity || 0);
+      doc.text(`Total Amount: ৳${totalAmount.toFixed(2)}`);
+      doc.text(`Amount Paid: ৳${invoice.amountPaid.toFixed(2)}`);
+      doc.text(`Dues: ৳${invoice.dues.toFixed(2)}`);
+
+      const buffers = [];
+      doc.on("data", buffers.push.bind(buffers));
+      doc.on("end", () => {
+        const pdfData = Buffer.concat(buffers);
+        resolve(pdfData);
+      });
+
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
   });
 }
 
